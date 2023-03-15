@@ -8,12 +8,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
-public class DirectorService {
+public class DirectorServiceImpl {
 
     private final DirectorCrudRepository repository;
     private final CpfService cpfService;
 
-    public DirectorService(DirectorCrudRepository repository, CpfService cpfService) {
+    public DirectorServiceImpl(DirectorCrudRepository repository, CpfService cpfService) {
         this.repository = repository;
         this.cpfService = cpfService;
     }
