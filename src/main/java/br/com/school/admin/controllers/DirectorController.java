@@ -2,6 +2,7 @@ package br.com.school.admin.controllers;
 
 import br.com.school.admin.models.Director;
 import br.com.school.admin.services.DirectorServiceImpl;
+import br.com.school.admin.utils.validators.DefaultValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,11 +39,13 @@ public class DirectorController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Director save(@RequestBody Director director) {
+        DefaultValidator.isValidDirector(director);
         return directorServiceImpl.save(director);
     }
 
     @PutMapping("/{id}")
     public Director update(@PathVariable Long id, @RequestBody Director director) {
+        DefaultValidator.isValidDirector(director);
         return directorServiceImpl.update(id, director);
     }
 

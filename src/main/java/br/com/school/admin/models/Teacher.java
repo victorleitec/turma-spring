@@ -6,8 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.validation.annotation.Validated;
 
 @Entity
@@ -20,18 +18,12 @@ public class Teacher {
     private Long id;
 
     @Column(name = "nm_teacher")
-    @NotNull(message = "Name is required")
-    @NotEmpty(message = "Name is required")
     private String name;
 
     @Column(name = "nr_cpf")
-    @NotNull(message = "CPF is required")
-    @NotEmpty(message = "CPF is required")
     private String cpf;
 
     @Column(name = "ds_specialty")
-    @NotNull(message = "Specialty is required")
-    @NotEmpty(message = "Specialty is required")
     private String specialty;
 
     public Teacher(String name, String cpf, String specialty) {

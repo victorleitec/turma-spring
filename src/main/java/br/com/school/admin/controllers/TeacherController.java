@@ -2,6 +2,7 @@ package br.com.school.admin.controllers;
 
 import br.com.school.admin.models.Teacher;
 import br.com.school.admin.services.DefaultCrudService;
+import br.com.school.admin.utils.validators.DefaultValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -39,11 +40,13 @@ public class TeacherController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Teacher save(@RequestBody @Valid Teacher teacher) {
+        DefaultValidator.isValidTeacher(teacher);
         return service.save(teacher);
     }
 
     @PutMapping("/{id}")
     public Teacher update(@PathVariable Long id, @RequestBody @Valid Teacher teacher) {
+        DefaultValidator.isValidTeacher(teacher);
         return service.update(id, teacher);
     }
 

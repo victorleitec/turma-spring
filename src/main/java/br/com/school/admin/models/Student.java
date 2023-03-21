@@ -7,9 +7,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import org.hibernate.validator.constraints.Length;
 import org.springframework.validation.annotation.Validated;
 
 @Entity
@@ -22,14 +19,9 @@ public class Student {
     private Long id;
 
     @Column(name = "nm_student")
-    @NotNull(message = "Name is required")
-    @NotEmpty(message = "Name is required")
     private String name;
 
     @Column(name = "nr_cpf")
-    @NotNull(message = "CPF is required")
-    @NotEmpty(message = "CPF is required")
-    @Length(min = 11, max = 11, message = "CPF must have 11 digits")
     private String cpf;
 
     public Student(String name, String cpf) {

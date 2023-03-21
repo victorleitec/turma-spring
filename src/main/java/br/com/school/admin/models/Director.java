@@ -6,8 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.validation.annotation.Validated;
 
 @Entity
@@ -21,13 +19,9 @@ public class Director {
     private Long id;
 
     @Column(name = "nm_director")
-    @NotEmpty(message = "Name is required")
-    @NotNull(message = "Name is required")
     private String name;
 
     @Column(name = "nr_cpf")
-    @NotEmpty(message = "CPF is required")
-    @NotNull(message = "CPF is required")
     private String cpf;
 
     public Director(String name, String cpf) {
