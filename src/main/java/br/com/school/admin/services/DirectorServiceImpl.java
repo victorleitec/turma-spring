@@ -28,13 +28,13 @@ public class DirectorServiceImpl {
     }
 
     public Director save(Director director) {
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(director.getCpf(), null);
+        cpfService.checkIfExistsWithCpf(director.getCpf(), null);
         return repository.save(director);
     }
 
     public Director update(Long id, Director director) {
         var directorToUpdate = findById(id);
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(director.getCpf(), directorToUpdate.getCpf());
+        cpfService.checkIfExistsWithCpf(director.getCpf(), directorToUpdate.getCpf());
         directorToUpdate.setName(director.getName());
         directorToUpdate.setCpf(director.getCpf());
         return repository.save(directorToUpdate);

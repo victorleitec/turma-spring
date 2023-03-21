@@ -31,14 +31,14 @@ public class TeacherServiceImpl implements DefaultCrudService<Teacher> {
 
     @Override
     public Teacher save(Teacher teacher) {
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(teacher.getCpf(), null);
+        cpfService.checkIfExistsWithCpf(teacher.getCpf(), null);
         return repository.save(teacher);
     }
 
     @Override
     public Teacher update(Long id, Teacher teacher) {
         var teacherToUpdate = findById(id);
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(teacher.getCpf(), teacherToUpdate.getCpf());
+        cpfService.checkIfExistsWithCpf(teacher.getCpf(), teacherToUpdate.getCpf());
         teacherToUpdate.setName(teacher.getName());
         teacherToUpdate.setCpf(teacher.getCpf());
         teacherToUpdate.setSpecialty(teacher.getSpecialty());

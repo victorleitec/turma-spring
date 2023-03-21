@@ -31,14 +31,14 @@ public class StudentServiceImpl implements DefaultCrudService<Student> {
 
     @Override
     public Student save(Student student) {
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(student.getCpf(), null);
+        cpfService.checkIfExistsWithCpf(student.getCpf(), null);
         return repository.save(student);
     }
 
     @Override
     public Student update(Long id, Student student) {
         var studentToUpdate = findById(id);
-        cpfService.existsByCpfAndDifferentThanCurrentCpf(student.getCpf(), studentToUpdate.getCpf());
+        cpfService.checkIfExistsWithCpf(student.getCpf(), studentToUpdate.getCpf());
         studentToUpdate.setName(student.getName());
         studentToUpdate.setCpf(student.getCpf());
         return repository.save(studentToUpdate);
