@@ -19,7 +19,7 @@ public class CpfService {
         this.directorRepository = directorRepository;
     }
 
-    public void existsByCpfAndDifferentThanCurrentCpf(String cpf, String currentCpf) {
+    public void checkIfExistsWithCpf(String cpf, String currentCpf) {
         var studentExists = studentRepository.existsByCpf(cpf);
         var teacherExists = teacherRepository.existsByCpf(cpf);
         var directorExists = directorRepository.existsByCpf(cpf);
