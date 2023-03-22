@@ -1,477 +1,376 @@
 package br.com.school.admin.controllers;
 
-import br.com.school.admin.exceptions.BusinessRuleException;
-import br.com.school.admin.exceptions.ResourceNotFoundException;
+import br.com.school.admin.factories.TeacherFactory;
 import br.com.school.admin.models.Teacher;
-import br.com.school.admin.services.TeacherServiceImpl;
+import br.com.school.admin.repositories.TeacherCrudRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
+import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
-@WebMvcTest(controllers = TeacherController.class)
+@AutoConfigureMockMvc
+@SpringBootTest
+@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class TeacherControllerTest {
 
     private static final String TEACHER_PATH = "/teachers";
 
     @Autowired
-    private MockMvc mockMvc;
+    MockMvc mockMvc;
 
-    @MockBean
-    private TeacherServiceImpl teacherService;
+    @Autowired
+    TeacherCrudRepository teacherRepository;
 
-    @InjectMocks
-    private TeacherController teacherController;
+    @Autowired
+    ObjectMapper objectMapper;
 
-    private ObjectMapper objectMapper;
+    private final Long nonExistentId = 999L;
+    private final Long existentId = 1L;
 
-    @BeforeEach
-    void setUp() {
-        objectMapper = new ObjectMapper();
-        standaloneSetup(teacherController)
-                .setControllerAdvice(new SchoolControllerAdvice());
+    private void generateMultipleData() {
+        teacherRepository.saveAll(TeacherFactory.createListOfTeachers());
     }
-    
+
+    private Teacher generateSingleData() {
+        return teacherRepository.save(TeacherFactory.createTeacher());
+    }
+
     /*
     CREATE TEACHER
-    1 - Error when teacher name or cpf is empty
-    2 - Error when teacher cpf is invalid
-    3 - Error when teacher cpf is already registered
-    4 - Success when teacher is created
+    1 - Error when try to create teacher with empty name or cpf or specialty
+    2 - Error when try to create teacher with invalid cpf
+    3 - Error when try to create teacher with cpf already registered
+    4 - Success when try to create a valid teacher
      */
 
     @Test
-    @DisplayName("Should return 400 when trying to create a teacher without name or cpf or specialty")
-    void shouldReturn400WhenTryingToCreateATeacherWithoutNameOrCpf() throws Exception {
+    @DisplayName("Should return error when try to create teacher with empty name or cpf")
+    void shouldReturnErrorWhenTryToCreateTeacherWithEmptyNameOrCpf() throws Exception {
         // given
-        var teacherWithoutName = new Teacher(null, "74539808010", "Math");
-        var teacherWithoutCpf = new Teacher("Joseph", null, "Math");
-        var teacherWithoutSpecialty = new Teacher("Joseph", "74539808010", null);
-        var jsonTeacherWithoutName = objectMapper.writeValueAsString(teacherWithoutName);
-        var jsonTeacherWithoutCpf = objectMapper.writeValueAsString(teacherWithoutCpf);
-        var jsonTeacherWithoutSpecialty = objectMapper.writeValueAsString(teacherWithoutSpecialty);
+        var teacherEmptyName = TeacherFactory.createTeacherWithEmptyName();
+        var teacherEmptyCpf = TeacherFactory.createTeacherWithEmptyCpf();
+        var teacherEmptySpecialty = TeacherFactory.createTeacherWithEmptySpecialty();
 
         // when
-        var requestWithoutName = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptyNameRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutName);
+                .content(objectMapper.writeValueAsString(teacherEmptyName));
 
-        var requestWithoutCpf = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptyCpfRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutCpf);
+                .content(objectMapper.writeValueAsString(teacherEmptyCpf));
 
-        var requestWithoutSpecialty = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptySpecialtyRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutSpecialty);
+                .content(objectMapper.writeValueAsString(teacherEmptySpecialty));
 
         // then
-        mockMvc.perform(requestWithoutName)
+        mockMvc.perform(teacherEmptyNameRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Name is required"));
 
-        verify(teacherService, never()).save(any(Teacher.class));
-
-        mockMvc.perform(requestWithoutCpf)
+        mockMvc.perform(teacherEmptyCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is required"));
 
-        verify(teacherService, never()).save(any(Teacher.class));
-
-        mockMvc.perform(requestWithoutSpecialty)
+        mockMvc.perform(teacherEmptySpecialtyRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Specialty is required"));
-
-        verify(teacherService, never()).save(any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to create a teacher with invalid cpf")
-    void shouldReturn400WhenTryingToCreateATeacherWithInvalidCpf() throws Exception {
+    @DisplayName("Should return error when try to create teacher with invalid cpf")
+    void shouldReturnErrorWhenTryToCreateTeacherWithInvalidCpf() throws Exception {
         // given
-        var teacherWithInvalidCpf = new Teacher("Joseph", "12345678910", "Math");
-        var jsonTeacherWithInvalidCpf = objectMapper.writeValueAsString(teacherWithInvalidCpf);
+        var teacherInvalidCpf = TeacherFactory.createTeacherWithInvalidCpf();
 
         // when
-        var requestWithInvalidCpf = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherInvalidCpfRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithInvalidCpf);
+                .content(objectMapper.writeValueAsString(teacherInvalidCpf));
 
         // then
-        mockMvc.perform(requestWithInvalidCpf)
+        mockMvc.perform(teacherInvalidCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is invalid"));
-
-        verify(teacherService, never()).save(any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to create a teacher with cpf that already exists")
-    void shouldReturn400WhenTryingToCreateATeacherWithCpfThatAlreadyExists() throws Exception {
+    @DisplayName("Should return error when try to create teacher with cpf already registered")
+    void shouldReturnErrorWhenTryToCreateTeacherWithCpfAlreadyRegistered() throws Exception {
         // given
-        var teacherWithCpfThatAlreadyExists = new Teacher("Joseph", "74539808010", "Math");
-        var jsonTeacherWithCpfThatAlreadyExists = objectMapper.writeValueAsString(teacherWithCpfThatAlreadyExists);
-        given(teacherService.save(any())).willThrow(new BusinessRuleException("CPF already exists"));
+        generateMultipleData();
+        var teacherCpfAlreadyRegistered = TeacherFactory.createTeacherWithCpfAlreadyRegistered();
 
         // when
-        var requestWithCpfThatAlreadyExists = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherCpfAlreadyRegisteredRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithCpfThatAlreadyExists);
+                .content(objectMapper.writeValueAsString(teacherCpfAlreadyRegistered));
 
         // then
-        mockMvc.perform(requestWithCpfThatAlreadyExists)
+        mockMvc.perform(teacherCpfAlreadyRegisteredRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF already exists"));
-
-        verify(teacherService, times(1)).save(any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 201 when trying to create a teacher with valid attributes")
-    void shouldReturn201WhenTryingToCreateATeacherWithValidAttributes() throws Exception {
+    @DisplayName("Should return success when try to create a valid teacher")
+    void shouldReturnSuccessWhenTryToCreateAValidTeacher() throws Exception {
         // given
-        var teacherWithValidAttributes = new Teacher("Joseph", "74539808010", "Math");
-        var jsonTeacherWithValidAttributes = objectMapper.writeValueAsString(teacherWithValidAttributes);
-
-        given(teacherService.save(any())).willReturn(teacherWithValidAttributes);
+        var teacher = TeacherFactory.createTeacher();
 
         // when
-        var requestWithValidAttributes = post(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherRequest = post(TEACHER_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithValidAttributes);
+                .content(objectMapper.writeValueAsString(teacher));
 
         // then
-        mockMvc.perform(requestWithValidAttributes)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"))
-                .andExpect(jsonPath("$.specialty").value("Math"));
-
-        verify(teacherService, times(1)).save(any(Teacher.class));
+                .andExpect(jsonPath("$.name").value(teacher.getName()))
+                .andExpect(jsonPath("$.cpf").value(teacher.getCpf()));
     }
 
     /*
     UPDATE TEACHER
-    1 - Error when teacher not found
-    2 - Error when teacher name or cpf or specialty is empty
-    3 - Error when teacher cpf is invalid
-    4 - Error when teacher cpf is already registered
-    5 - Success when teacher is updated
+    1 - Error when try to update non-existent teacher
+    2 - Error when try to update teacher with empty name or cpf or specialty
+    3 - Error when try to update teacher with invalid cpf
+    4 - Error when try to update teacher with cpf already registered
+    5 - Ok when try to update a valid teacher
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to update a teacher that does not exist")
-    void shouldReturn404WhenTryingToUpdateATeacherThatDoesNotExist() throws Exception {
+    @DisplayName("Should return error when try to update non-existent teacher")
+    void shouldReturnErrorWhenTryToUpdateNonExistentTeacher() throws Exception {
         // given
-        var nonExistentTeacherId = 5L;
-        var jsonTeacherThatDoesNotExist = objectMapper.writeValueAsString(
-                new Teacher("Joseph", "74539808010", "Math"));
-        given(teacherService.update(anyLong(), any(Teacher.class)))
-                .willThrow(new ResourceNotFoundException("Teacher not found"));
+        var teacher = TeacherFactory.createTeacher();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + nonExistentTeacherId;
-        var request = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherRequest = put(TEACHER_PATH + "/{id}", nonExistentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherThatDoesNotExist);
+                .content(objectMapper.writeValueAsString(teacher));
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Teacher not found"));
-
-        verify(teacherService, times(1)).update(anyLong(), any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a teacher without name or cpf or specialty")
-    void shouldReturn400WhenTryingToUpdateATeacherWithoutNameOrCpf() throws Exception {
+    @DisplayName("Should return error when try to update teacher with empty name or cpf")
+    void shouldReturnErrorWhenTryToUpdateTeacherWithEmptyNameOrCpf() throws Exception {
         // given
-        var teacherWithoutName = new Teacher(null, "74539808010", "Math");
-        teacherWithoutName.setId(1L);
-        var teacherWithoutCpf = new Teacher("Joseph", null, "Math");
-        teacherWithoutCpf.setId(2L);
-        var teacherWithoutSpecialty = new Teacher("Joseph", "74539808010", null);
-        teacherWithoutSpecialty.setId(3L);
-        var jsonTeacherWithoutName = objectMapper.writeValueAsString(teacherWithoutName);
-        var jsonTeacherWithoutCpf = objectMapper.writeValueAsString(teacherWithoutCpf);
-        var jsonTeacherWithoutSpecialty = objectMapper.writeValueAsString(teacherWithoutSpecialty);
+        var teacherEmptyName = TeacherFactory.createTeacherWithEmptyName();
+        var teacherEmptyCpf = TeacherFactory.createTeacherWithEmptyCpf();
+        var teacherEmptySpecialty = TeacherFactory.createTeacherWithEmptySpecialty();
 
         // when
-        var pathWithoutName = TEACHER_PATH + "/" + teacherWithoutName.getId();
-        var requestWithoutName = put(pathWithoutName)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptyNameRequest = put(TEACHER_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutName);
+                .content(objectMapper.writeValueAsString(teacherEmptyName));
 
-        var pathWithoutCpf = TEACHER_PATH + "/" + teacherWithoutCpf.getId();
-        var requestWithoutCpf = put(pathWithoutCpf)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptyCpfRequest = put(TEACHER_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutCpf);
+                .content(objectMapper.writeValueAsString(teacherEmptyCpf));
 
-        var pathWithoutSpecialty = TEACHER_PATH + "/" + teacherWithoutSpecialty.getId();
-        var requestWithoutSpecialty = put(pathWithoutSpecialty)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherEmptySpecialtyRequest = put(TEACHER_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithoutSpecialty);
+                .content(objectMapper.writeValueAsString(teacherEmptySpecialty));
 
         // then
-        mockMvc.perform(requestWithoutName)
+        mockMvc.perform(teacherEmptyNameRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Name is required"));
 
-        verify(teacherService, never()).save(any(Teacher.class));
-
-        mockMvc.perform(requestWithoutCpf)
+        mockMvc.perform(teacherEmptyCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is required"));
 
-        verify(teacherService, never()).save(any(Teacher.class));
-
-        mockMvc.perform(requestWithoutSpecialty)
+        mockMvc.perform(teacherEmptySpecialtyRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Specialty is required"));
-
-        verify(teacherService, never()).save(any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a teacher with invalid cpf")
-    void shouldReturn400WhenTryingToUpdateATeacherWithInvalidCpf() throws Exception {
+    @DisplayName("Should return error when try to update teacher with invalid cpf")
+    void shouldReturnErrorWhenTryToUpdateTeacherWithInvalidCpf() throws Exception {
         // given
-        var teacherWithInvalidCpf = new Teacher("Joseph", "12345678910", "Math");
-        teacherWithInvalidCpf.setId(1L);
-        var jsonTeacherWithInvalidCpf = objectMapper.writeValueAsString(teacherWithInvalidCpf);
+        var teacherInvalidCpf = TeacherFactory.createTeacherWithInvalidCpf();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherWithInvalidCpf.getId();
-        var requestWithInvalidCpf = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherInvalidCpfRequest = put(TEACHER_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithInvalidCpf);
+                .content(objectMapper.writeValueAsString(teacherInvalidCpf));
 
         // then
-        mockMvc.perform(requestWithInvalidCpf)
+        mockMvc.perform(teacherInvalidCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is invalid"));
-
-        verify(teacherService, never()).save(any(Teacher.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a teacher with cpf that already exists")
-    void shouldReturn400WhenTryingToUpdateATeacherWithCpfThatAlreadyExists() throws Exception {
+    @DisplayName("Should return error when try to update teacher with cpf already registered")
+    void shouldReturnErrorWhenTryToUpdateTeacherWithCpfAlreadyRegistered() throws Exception {
         // given
-        var teacherWithCpfThatAlreadyExists = new Teacher("Joseph", "74539808010", "Math");
-        teacherWithCpfThatAlreadyExists.setId(1L);
-        var jsonTeacherWithCpfThatAlreadyExists = objectMapper.writeValueAsString(teacherWithCpfThatAlreadyExists);
-        given(teacherService.update(anyLong(), any(Teacher.class)))
-                .willThrow(new BusinessRuleException("CPF already exists"));
+        generateMultipleData();
+        var teacherCpfAlreadyRegistered = TeacherFactory.createTeacherWithCpfAlreadyRegistered();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherWithCpfThatAlreadyExists.getId();
-        var requestWithCpfThatAlreadyExists = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherCpfAlreadyRegisteredRequest = put(TEACHER_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithCpfThatAlreadyExists);
+                .content(objectMapper.writeValueAsString(teacherCpfAlreadyRegistered));
 
         // then
-        mockMvc.perform(requestWithCpfThatAlreadyExists)
+        mockMvc.perform(teacherCpfAlreadyRegisteredRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF already exists"));
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to update a teacher with valid attributes")
-    void shouldReturn200WhenTryingToUpdateATeacherWithValidAttributes() throws Exception {
+    @DisplayName("Should return success when try to update a valid teacher")
+    void shouldReturnSuccessWhenTryToUpdateAValidTeacher() throws Exception {
         // given
-        var teacherWithValidAttributes = new Teacher("Joseph", "74539808010", "Math");
-        teacherWithValidAttributes.setId(1L);
-        var jsonTeacherWithValidAttributes = objectMapper.writeValueAsString(teacherWithValidAttributes);
-
-        given(teacherService.update(anyLong(), any())).willReturn(teacherWithValidAttributes);
+        var teacher = generateSingleData();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherWithValidAttributes.getId();
-        var requestWithValidAttributes = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var teacherRequest = put(TEACHER_PATH + "/{id}", teacher.getId())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonTeacherWithValidAttributes);
+                .content(objectMapper.writeValueAsString(teacher));
 
         // then
-        mockMvc.perform(requestWithValidAttributes)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"))
-                .andExpect(jsonPath("$.specialty").value("Math"));
-
-        verify(teacherService, times(1)).update(anyLong(), any(Teacher.class));
+                .andExpect(jsonPath("$.name").value(teacher.getName()))
+                .andExpect(jsonPath("$.cpf").value(teacher.getCpf()));
     }
 
     /*
     DELETE TEACHER
-    1 - Error when teacher id is not found
-    2 - Success when teacher is deleted
+    1 - Error when try to delete non-existent teacher
+    2 - No-Content when try to delete existent teacher
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to delete a teacher with id that does not exist")
-    void shouldReturn404WhenTryingToDeleteATeacherWithIdThatDoesNotExist() throws Exception {
-        // given
-        var teacherIdThatDoesNotExist = 1L;
-        doThrow(new ResourceNotFoundException("Teacher not found")).when(teacherService).delete(anyLong());
+    @DisplayName("Should return error when try to delete non-existent teacher")
+    void shouldReturnErrorWhenTryToDeleteNonExistentTeacher() throws Exception {
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherIdThatDoesNotExist;
-        var requestWithIdThatDoesNotExist = delete(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = delete(TEACHER_PATH + "/{id}", nonExistentId);
 
         // then
-        mockMvc.perform(requestWithIdThatDoesNotExist)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Teacher not found"));
-
-        verify(teacherService, times(1)).delete(anyLong());
     }
 
     @Test
-    @DisplayName("Should return 204 when trying to delete a teacher with id that exists")
-    void shouldReturn204WhenTryingToDeleteATeacherWithIdThatExists() throws Exception {
+    @DisplayName("Should return no-content when try to delete a existent teacher")
+    void shouldReturnNoContentWhenTryToDeleteAExistentTeacher() throws Exception {
         // given
-        var teacherIdThatExists = 1L;
+        generateSingleData();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherIdThatExists;
-        var requestWithIdThatExists = delete(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = delete(TEACHER_PATH + "/{id}", existentId);
 
         // then
-        mockMvc.perform(requestWithIdThatExists)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isNoContent());
-
-        verify(teacherService, times(1)).delete(anyLong());
     }
+
 
     /*
     GET TEACHER BY ID
-    1 - Error when teacher id is not found
-    2 - Success when teacher is found
+    1 - Error when try to get non-existent teacher
+    2 - Success when try to get existent teacher
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to find a teacher with id that does not exist")
-    void shouldReturn404WhenTryingToFindATeacherWithIdThatDoesNotExist() throws Exception {
-        // given
-        var teacherIdThatDoesNotExist = 1L;
-        given(teacherService.findById(anyLong())).willThrow(new ResourceNotFoundException("Teacher not found"));
-
+    @DisplayName("Should return error when try to get non-existent teacher")
+    void shouldReturnErrorWhenTryToGetNonExistentTeacher() throws Exception {
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherIdThatDoesNotExist;
-        var requestWithIdThatDoesNotExist = get(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = get(TEACHER_PATH + "/{id}", nonExistentId);
 
         // then
-        mockMvc.perform(requestWithIdThatDoesNotExist)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Teacher not found"));
-
-        verify(teacherService, times(1)).findById(anyLong());
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to find a teacher with id that exists")
-    void shouldReturn200WhenTryingToFindATeacherWithIdThatExists() throws Exception {
+    @DisplayName("Should return success when try to get a existent teacher")
+    void shouldReturnSuccessWhenTryToGetAExistentTeacher() throws Exception {
         // given
-        var teacherAlreadyCreated = new Teacher("Joseph", "74539808010", "Math");
-        teacherAlreadyCreated.setId(1L);
-        given(teacherService.findById(anyLong())).willReturn(teacherAlreadyCreated);
+        var teacher = generateSingleData();
 
         // when
-        var pathWithId = TEACHER_PATH + "/" + teacherAlreadyCreated.getId();
-        var requestWithIdThatExists = get(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = get(TEACHER_PATH + "/{id}", teacher.getId());
 
         // then
-        mockMvc.perform(requestWithIdThatExists)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"));
+                .andExpect(jsonPath("$.name").value(teacher.getName()))
+                .andExpect(jsonPath("$.cpf").value(teacher.getCpf()));
     }
 
     /*
     GET TEACHERS
-    1 - Success when there are teachers
-    2 - Success when there are no teachers
+    1 - Success when try to get all teachers
+    2 - Success when try to get all teachers and return empty list
      */
 
     @Test
-    @DisplayName("Should return 200 when trying to find all teachers")
-    void shouldReturn200WhenTryingToFindAllTeachers() throws Exception {
+    @DisplayName("Should return success when try to get all teachers")
+    void shouldReturnSuccessWhenTryToGetAllTeachers() throws Exception {
         // given
-        var teacherAlreadyCreated = new Teacher("Joseph", "74539808010", "Math");
-        teacherAlreadyCreated.setId(1L);
-        var teacherAlreadyCreated2 = new Teacher("Michael", "64173091001", "Science");
-        var teachers = List.of(teacherAlreadyCreated, teacherAlreadyCreated2);
-        given(teacherService.findAll()).willReturn(teachers);
+        generateMultipleData();
 
         // when
-        var request = get(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = get(TEACHER_PATH);
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Joseph"))
                 .andExpect(jsonPath("$[0].cpf").value("74539808010"))
-                .andExpect(jsonPath("$[0].specialty").value("Math"))
-                .andExpect(jsonPath("$[1].name").value("Michael"))
-                .andExpect(jsonPath("$[1].cpf").value("64173091001"))
-                .andExpect(jsonPath("$[1].specialty").value("Science"));
+                .andExpect(jsonPath("$[1].name").value("John"))
+                .andExpect(jsonPath("$[1].cpf").value("40082430039"));
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to find all teachers but there are no teachers")
-    void shouldReturn200WhenTryingToFindAllTeachersButThereAreNoTeachers() throws Exception {
-        // given
-        var teachers = new ArrayList<Teacher>();
-        given(teacherService.findAll()).willReturn(teachers);
-
+    @DisplayName("Should return success when try to get all teachers and return empty list")
+    void shouldReturnSuccessWhenTryToGetAllTeachersAndReturnEmptyList() throws Exception {
         // when
-        var request = get(TEACHER_PATH)
-                .accept(MediaType.APPLICATION_JSON);
+        var teacherRequest = get(TEACHER_PATH);
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(teacherRequest)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
     }

@@ -1,445 +1,356 @@
 package br.com.school.admin.controllers;
 
-import br.com.school.admin.exceptions.BusinessRuleException;
-import br.com.school.admin.exceptions.ResourceNotFoundException;
+import br.com.school.admin.factories.DirectorFactory;
 import br.com.school.admin.models.Director;
-import br.com.school.admin.services.DirectorServiceImpl;
+import br.com.school.admin.repositories.DirectorCrudRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
+import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
-@WebMvcTest(controllers = DirectorController.class)
+@AutoConfigureMockMvc
+@SpringBootTest
+@Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class DirectorControllerTest {
 
     private static final String DIRECTOR_PATH = "/directors";
 
     @Autowired
-    private MockMvc mockMvc;
+    MockMvc mockMvc;
 
-    @MockBean
-    private DirectorServiceImpl directorService;
+    @Autowired
+    DirectorCrudRepository directorRepository;
 
-    @InjectMocks
-    private DirectorController directorController;
+    @Autowired
+    ObjectMapper objectMapper;
 
-    private ObjectMapper objectMapper;
+    private final Long nonExistentId = 999L;
+    private final Long existentId = 1L;
 
-    @BeforeEach
-    void setUp() {
-        objectMapper = new ObjectMapper();
-        standaloneSetup(directorController)
-                .setControllerAdvice(new SchoolControllerAdvice());
+    private void generateMultipleData() {
+        directorRepository.saveAll(DirectorFactory.createListOfDirectors());
+    }
+
+    private Director generateSingleData() {
+        return directorRepository.save(DirectorFactory.createDirector());
     }
 
     /*
     CREATE DIRECTOR
-    1 - Error when director name or cpf is empty
-    2 - Error when director cpf is invalid
-    3 - Error when director cpf is already registered
-    4 - Success when director is created
+    1 - Error when try to create director with empty name or cpf
+    2 - Error when try to create director with invalid cpf
+    3 - Error when try to create director with cpf already registered
+    4 - Success when try to create a valid director
      */
 
     @Test
-    @DisplayName("Should return 400 when trying to create a director without name or cpf")
-    void shouldReturn400WhenTryingToCreateADirectorWithoutNameOrCpf() throws Exception {
+    @DisplayName("Should return error when try to create director with empty name or cpf")
+    void shouldReturnErrorWhenTryToCreateDirectorWithEmptyNameOrCpf() throws Exception {
         // given
-        var directorWithoutName = new Director(null, "74539808010");
-        var directorWithoutCpf = new Director("Joseph", null);
-        var jsonDirectorWithoutName = objectMapper.writeValueAsString(directorWithoutName);
-        var jsonDirectorWithoutCpf = objectMapper.writeValueAsString(directorWithoutCpf);
+        var directorEmptyName = DirectorFactory.createDirectorWithEmptyName();
+        var directorEmptyCpf = DirectorFactory.createDirectorWithEmptyCpf();
 
         // when
-        var requestWithoutName = post(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorEmptyNameRequest = post(DIRECTOR_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithoutName);
+                .content(objectMapper.writeValueAsString(directorEmptyName));
 
-        var requestWithoutCpf = post(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorEmptyCpfRequest = post(DIRECTOR_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithoutCpf);
+                .content(objectMapper.writeValueAsString(directorEmptyCpf));
 
         // then
-        mockMvc.perform(requestWithoutName)
+        mockMvc.perform(directorEmptyNameRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Name is required"));
 
-        verify(directorService, never()).save(any(Director.class));
-
-        mockMvc.perform(requestWithoutCpf)
+        mockMvc.perform(directorEmptyCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is required"));
-
-        verify(directorService, never()).save(any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to create a director with invalid cpf")
-    void shouldReturn400WhenTryingToCreateADirectorWithInvalidCpf() throws Exception {
+    @DisplayName("Should return error when try to create director with invalid cpf")
+    void shouldReturnErrorWhenTryToCreateDirectorWithInvalidCpf() throws Exception {
         // given
-        var directorWithInvalidCpf = new Director("Joseph", "12345678910");
-        var jsonDirectorWithInvalidCpf = objectMapper.writeValueAsString(directorWithInvalidCpf);
+        var directorInvalidCpf = DirectorFactory.createDirectorWithInvalidCpf();
 
         // when
-        var requestWithInvalidCpf = post(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorInvalidCpfRequest = post(DIRECTOR_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithInvalidCpf);
+                .content(objectMapper.writeValueAsString(directorInvalidCpf));
 
         // then
-        mockMvc.perform(requestWithInvalidCpf)
+        mockMvc.perform(directorInvalidCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is invalid"));
-
-        verify(directorService, never()).save(any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to create a director with cpf that already exists")
-    void shouldReturn400WhenTryingToCreateADirectorWithCpfThatAlreadyExists() throws Exception {
+    @DisplayName("Should return error when try to create director with cpf already registered")
+    void shouldReturnErrorWhenTryToCreateDirectorWithCpfAlreadyRegistered() throws Exception {
         // given
-        var directorWithCpfThatAlreadyExists = new Director("Joseph", "74539808010");
-        var jsonDirectorWithCpfThatAlreadyExists = objectMapper.writeValueAsString(directorWithCpfThatAlreadyExists);
-        given(directorService.save(any())).willThrow(new BusinessRuleException("CPF already exists"));
+        generateMultipleData();
+        var directorCpfAlreadyRegistered = DirectorFactory.createDirectorWithCpfAlreadyRegistered();
 
         // when
-        var requestWithCpfThatAlreadyExists = post(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorCpfAlreadyRegisteredRequest = post(DIRECTOR_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithCpfThatAlreadyExists);
+                .content(objectMapper.writeValueAsString(directorCpfAlreadyRegistered));
 
         // then
-        mockMvc.perform(requestWithCpfThatAlreadyExists)
+        mockMvc.perform(directorCpfAlreadyRegisteredRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF already exists"));
-
-        verify(directorService, times(1)).save(any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 201 when trying to create a director with valid attributes")
-    void shouldReturn201WhenTryingToCreateADirectorWithValidAttributes() throws Exception {
+    @DisplayName("Should return success when try to create a valid director")
+    void shouldReturnSuccessWhenTryToCreateAValidDirector() throws Exception {
         // given
-        var directorWithValidAttributes = new Director("Joseph", "74539808010");
-        var jsonDirectorWithValidAttributes = objectMapper.writeValueAsString(directorWithValidAttributes);
-
-        given(directorService.save(any())).willReturn(directorWithValidAttributes);
+        var director = DirectorFactory.createDirector();
 
         // when
-        var requestWithValidAttributes = post(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorRequest = post(DIRECTOR_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithValidAttributes);
+                .content(objectMapper.writeValueAsString(director));
 
         // then
-        mockMvc.perform(requestWithValidAttributes)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"));
-
-        verify(directorService, times(1)).save(any(Director.class));
+                .andExpect(jsonPath("$.name").value(director.getName()))
+                .andExpect(jsonPath("$.cpf").value(director.getCpf()));
     }
 
     /*
     UPDATE DIRECTOR
-    1 - Error when director not found
-    2 - Error when director name or cpf is empty
-    3 - Error when director cpf is invalid
-    4 - Error when director cpf is already registered
-    5 - Success when director is updated
+    1 - Error when try to update non-existent director
+    2 - Error when try to update director with empty name or cpf
+    3 - Error when try to update director with invalid cpf
+    4 - Error when try to update director with cpf already registered
+    5 - Ok when try to update a valid director
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to update a director that does not exist")
-    void shouldReturn404WhenTryingToUpdateADirectorThatDoesNotExist() throws Exception {
+    @DisplayName("Should return error when try to update non-existent director")
+    void shouldReturnErrorWhenTryToUpdateNonExistentDirector() throws Exception {
         // given
-        var nonExistentDirectorId = 5L;
-        var jsonDirectorThatDoesNotExist = objectMapper.writeValueAsString(
-                new Director("Joseph", "74539808010"));
-        given(directorService.update(anyLong(), any(Director.class)))
-                .willThrow(new ResourceNotFoundException("Director not found"));
+        var director = DirectorFactory.createDirector();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + nonExistentDirectorId;
-        var request = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorRequest = put(DIRECTOR_PATH + "/{id}", nonExistentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorThatDoesNotExist);
+                .content(objectMapper.writeValueAsString(director));
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Director not found"));
-
-        verify(directorService, times(1)).update(anyLong(), any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a director without name or cpf")
-    void shouldReturn400WhenTryingToUpdateADirectorWithoutNameOrCpf() throws Exception {
+    @DisplayName("Should return error when try to update director with empty name or cpf")
+    void shouldReturnErrorWhenTryToUpdateDirectorWithEmptyNameOrCpf() throws Exception {
         // given
-        var directorWithoutName = new Director(null, "74539808010");
-        directorWithoutName.setId(1L);
-        var directorWithoutCpf = new Director("Joseph", null);
-        directorWithoutCpf.setId(2L);
-        var jsonDirectorWithoutName = objectMapper.writeValueAsString(directorWithoutName);
-        var jsonDirectorWithoutCpf = objectMapper.writeValueAsString(directorWithoutCpf);
+        var directorEmptyName = DirectorFactory.createDirectorWithEmptyName();
+        var directorEmptyCpf = DirectorFactory.createDirectorWithEmptyCpf();
 
         // when
-        var pathWithoutName = DIRECTOR_PATH + "/" + directorWithoutName.getId();
-        var requestWithoutName = put(pathWithoutName)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorEmptyNameRequest = put(DIRECTOR_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithoutName);
+                .content(objectMapper.writeValueAsString(directorEmptyName));
 
-        var pathWithoutCpf = DIRECTOR_PATH + "/" + directorWithoutCpf.getId();
-        var requestWithoutCpf = put(pathWithoutCpf)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorEmptyCpfRequest = put(DIRECTOR_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithoutCpf);
+                .content(objectMapper.writeValueAsString(directorEmptyCpf));
 
         // then
-        mockMvc.perform(requestWithoutName)
+        mockMvc.perform(directorEmptyNameRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("Name is required"));
 
-        verify(directorService, never()).save(any(Director.class));
-
-        mockMvc.perform(requestWithoutCpf)
+        mockMvc.perform(directorEmptyCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is required"));
-
-        verify(directorService, never()).save(any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a director with invalid cpf")
-    void shouldReturn400WhenTryingToUpdateADirectorWithInvalidCpf() throws Exception {
+    @DisplayName("Should return error when try to update director with invalid cpf")
+    void shouldReturnErrorWhenTryToUpdateDirectorWithInvalidCpf() throws Exception {
         // given
-        var directorWithInvalidCpf = new Director("Joseph", "12345678910");
-        directorWithInvalidCpf.setId(1L);
-        var jsonDirectorWithInvalidCpf = objectMapper.writeValueAsString(directorWithInvalidCpf);
+        var directorInvalidCpf = DirectorFactory.createDirectorWithInvalidCpf();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorWithInvalidCpf.getId();
-        var requestWithInvalidCpf = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorInvalidCpfRequest = put(DIRECTOR_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithInvalidCpf);
+                .content(objectMapper.writeValueAsString(directorInvalidCpf));
 
         // then
-        mockMvc.perform(requestWithInvalidCpf)
+        mockMvc.perform(directorInvalidCpfRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF is invalid"));
-
-        verify(directorService, never()).save(any(Director.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when trying to update a director with cpf that already exists")
-    void shouldReturn400WhenTryingToUpdateADirectorWithCpfThatAlreadyExists() throws Exception {
+    @DisplayName("Should return error when try to update director with cpf already registered")
+    void shouldReturnErrorWhenTryToUpdateDirectorWithCpfAlreadyRegistered() throws Exception {
         // given
-        var directorWithCpfThatAlreadyExists = new Director("Joseph", "74539808010");
-        directorWithCpfThatAlreadyExists.setId(1L);
-        var jsonDirectorWithCpfThatAlreadyExists = objectMapper.writeValueAsString(directorWithCpfThatAlreadyExists);
-        given(directorService.update(anyLong(), any(Director.class)))
-                .willThrow(new BusinessRuleException("CPF already exists"));
+        generateMultipleData();
+        var directorCpfAlreadyRegistered = DirectorFactory.createDirectorWithCpfAlreadyRegistered();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorWithCpfThatAlreadyExists.getId();
-        var requestWithCpfThatAlreadyExists = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorCpfAlreadyRegisteredRequest = put(DIRECTOR_PATH + "/{id}", existentId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithCpfThatAlreadyExists);
+                .content(objectMapper.writeValueAsString(directorCpfAlreadyRegistered));
 
         // then
-        mockMvc.perform(requestWithCpfThatAlreadyExists)
+        mockMvc.perform(directorCpfAlreadyRegisteredRequest)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value("400"))
                 .andExpect(jsonPath("$.message").value("CPF already exists"));
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to update a director with valid attributes")
-    void shouldReturn200WhenTryingToUpdateADirectorWithValidAttributes() throws Exception {
+    @DisplayName("Should return success when try to update a valid director")
+    void shouldReturnSuccessWhenTryToUpdateAValidDirector() throws Exception {
         // given
-        var directorWithValidAttributes = new Director("Joseph", "74539808010");
-        directorWithValidAttributes.setId(1L);
-        var jsonDirectorWithValidAttributes = objectMapper.writeValueAsString(directorWithValidAttributes);
-
-        given(directorService.update(anyLong(), any())).willReturn(directorWithValidAttributes);
+        var director = generateSingleData();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorWithValidAttributes.getId();
-        var requestWithValidAttributes = put(pathWithId)
-                .accept(MediaType.APPLICATION_JSON)
+        var directorRequest = put(DIRECTOR_PATH + "/{id}", director.getId())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonDirectorWithValidAttributes);
+                .content(objectMapper.writeValueAsString(director));
 
         // then
-        mockMvc.perform(requestWithValidAttributes)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"));
-
-        verify(directorService, times(1)).update(anyLong(), any(Director.class));
+                .andExpect(jsonPath("$.name").value(director.getName()))
+                .andExpect(jsonPath("$.cpf").value(director.getCpf()));
     }
 
     /*
     DELETE DIRECTOR
-    1 - Error when director id is not found
-    2 - Success when director is deleted
+    1 - Error when try to delete non-existent director
+    2 - No-Content when try to delete a existent director
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to delete a director with id that does not exist")
-    void shouldReturn404WhenTryingToDeleteADirectorWithIdThatDoesNotExist() throws Exception {
-        // given
-        var directorIdThatDoesNotExist = 1L;
-        doThrow(new ResourceNotFoundException("Director not found")).when(directorService).delete(anyLong());
+    @DisplayName("Should return error when try to delete non-existent director")
+    void shouldReturnErrorWhenTryToDeleteNonExistentDirector() throws Exception {
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorIdThatDoesNotExist;
-        var requestWithIdThatDoesNotExist = delete(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = delete(DIRECTOR_PATH + "/{id}", nonExistentId);
 
         // then
-        mockMvc.perform(requestWithIdThatDoesNotExist)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Director not found"));
-
-        verify(directorService, times(1)).delete(anyLong());
     }
 
     @Test
-    @DisplayName("Should return 204 when trying to delete a director with id that exists")
-    void shouldReturn204WhenTryingToDeleteADirectorWithIdThatExists() throws Exception {
+    @DisplayName("Should return no-content when try to delete a existent director")
+    void shouldReturnNoContentWhenTryToDeleteAExistentDirector() throws Exception {
         // given
-        var directorIdThatExists = 1L;
+        generateSingleData();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorIdThatExists;
-        var requestWithIdThatExists = delete(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = delete(DIRECTOR_PATH + "/{id}", existentId);
 
         // then
-        mockMvc.perform(requestWithIdThatExists)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isNoContent());
-
-        verify(directorService, times(1)).delete(anyLong());
     }
+
 
     /*
     GET DIRECTOR BY ID
-    1 - Error when director id is not found
-    2 - Success when director is found
+    1 - Error when try to get non-existent director
+    2 - Success when try to get a existent director
      */
 
     @Test
-    @DisplayName("Should return 404 when trying to find a director with id that does not exist")
-    void shouldReturn404WhenTryingToFindADirectorWithIdThatDoesNotExist() throws Exception {
-        // given
-        var directorIdThatDoesNotExist = 1L;
-        given(directorService.findById(anyLong())).willThrow(new ResourceNotFoundException("Director not found"));
-
+    @DisplayName("Should return error when try to get non-existent director")
+    void shouldReturnErrorWhenTryToGetNonExistentDirector() throws Exception {
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorIdThatDoesNotExist;
-        var requestWithIdThatDoesNotExist = get(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = get(DIRECTOR_PATH + "/{id}", nonExistentId);
 
         // then
-        mockMvc.perform(requestWithIdThatDoesNotExist)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.statusCode").value("404"))
                 .andExpect(jsonPath("$.message").value("Director not found"));
-
-        verify(directorService, times(1)).findById(anyLong());
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to find a director with id that exists")
-    void shouldReturn200WhenTryingToFindADirectorWithIdThatExists() throws Exception {
+    @DisplayName("Should return success when try to get a existent director")
+    void shouldReturnSuccessWhenTryToGetAExistentDirector() throws Exception {
         // given
-        var directorAlreadyCreated = new Director("Joseph", "74539808010");
-        directorAlreadyCreated.setId(1L);
-        given(directorService.findById(anyLong())).willReturn(directorAlreadyCreated);
+        var director = generateSingleData();
 
         // when
-        var pathWithId = DIRECTOR_PATH + "/" + directorAlreadyCreated.getId();
-        var requestWithIdThatExists = get(pathWithId)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = get(DIRECTOR_PATH + "/{id}", director.getId());
 
         // then
-        mockMvc.perform(requestWithIdThatExists)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Joseph"))
-                .andExpect(jsonPath("$.cpf").value("74539808010"));
+                .andExpect(jsonPath("$.name").value(director.getName()))
+                .andExpect(jsonPath("$.cpf").value(director.getCpf()));
     }
 
     /*
     GET DIRECTORS
-    1 - Success when there are directors
-    2 - Success when there are no directors
+    1 - Success when try to get all directors
+    2 - Success when try to get all directors and return empty list
      */
 
     @Test
-    @DisplayName("Should return 200 when trying to find all directors")
-    void shouldReturn200WhenTryingToFindAllDirectors() throws Exception {
+    @DisplayName("Should return success when try to get all directors")
+    void shouldReturnSuccessWhenTryToGetAllDirectors() throws Exception {
         // given
-        var directorAlreadyCreated = new Director("Joseph", "74539808010");
-        directorAlreadyCreated.setId(1L);
-        var directorAlreadyCreated2 = new Director("Michael", "64173091001");
-        var directors = List.of(directorAlreadyCreated, directorAlreadyCreated2);
-        given(directorService.findAll()).willReturn(directors);
+        generateMultipleData();
 
         // when
-        var request = get(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = get(DIRECTOR_PATH);
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Joseph"))
                 .andExpect(jsonPath("$[0].cpf").value("74539808010"))
-                .andExpect(jsonPath("$[1].name").value("Michael"))
-                .andExpect(jsonPath("$[1].cpf").value("64173091001"));
+                .andExpect(jsonPath("$[1].name").value("John"))
+                .andExpect(jsonPath("$[1].cpf").value("40082430039"));
     }
 
     @Test
-    @DisplayName("Should return 200 when trying to find all directors but there are no directors")
-    void shouldReturn200WhenTryingToFindAllDirectorsButThereAreNoDirectors() throws Exception {
-        // given
-        var directors = new ArrayList<Director>();
-        given(directorService.findAll()).willReturn(directors);
-
+    @DisplayName("Should return success when try to get all directors and return empty list")
+    void shouldReturnSuccessWhenTryToGetAllDirectorsAndReturnEmptyList() throws Exception {
         // when
-        var request = get(DIRECTOR_PATH)
-                .accept(MediaType.APPLICATION_JSON);
+        var directorRequest = get(DIRECTOR_PATH);
 
         // then
-        mockMvc.perform(request)
+        mockMvc.perform(directorRequest)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
     }
