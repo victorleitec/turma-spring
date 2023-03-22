@@ -25,7 +25,7 @@ public class CpfService {
         var directorExists = directorRepository.existsByCpf(cpf);
 
         if ((studentExists || teacherExists || directorExists) && !cpf.equals(currentCpf)) {
-            throw new BusinessRuleException("Cpf already exists");
+            throw new BusinessRuleException("CPF already exists");
         }
     }
 }
